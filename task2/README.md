@@ -1,6 +1,5 @@
 ### **README.md**
 
-````
 # Task 2: DROID Scene Captioning & Instruction Alignment
 
 This directory contains the scripts for **Step 2** of the data processing pipeline. This step generates semantic scene descriptions for DROID episodes using **Qwen2-VL-7B-Instruct** and combines them with the original robot task instructions.

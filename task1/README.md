@@ -1,6 +1,5 @@
 ### **README.md**
 
-````
 # Task 1: Robot RGB Mask Generation (SAM3)
 
 This directory contains the scripts for **Step 1** of the data processing pipeline: generating robot segmentation masks for the DROID dataset using the SAM3 model.

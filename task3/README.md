@@ -1,6 +1,5 @@
 ### **README.md**
 
-````
 # Task 3: Stereo Depth Video Generation
 
 This directory contains the scripts for **Step 3** of the data processing pipeline: converting stereo RGB videos (Side-by-Side) from the DROID dataset into depth map videos using the **Foundation Stereo** model.

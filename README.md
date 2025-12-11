@@ -1,6 +1,5 @@
 ### **README.md**
 
-````
 # DROID Data Pre-processing Pipeline
 
 This project implements a multi-stage data processing pipeline for the DROID dataset. It transforms raw RLDS episodes and stereo videos into semantic masks, natural language descriptions, and depth maps for downstream policy training.
