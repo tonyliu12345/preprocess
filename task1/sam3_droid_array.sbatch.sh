@@ -7,19 +7,19 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=128G
 #SBATCH --time=3-00:00:00
-#SBATCH --array=0-31%32                # 只 32 个 job，每个占 1 GPU
+#SBATCH --array=0-31%32                # Only 32 jobs, each taking 1 GPU
 #SBATCH --output=logs/sam3_droid_%A_%a.out
 #SBATCH --error=logs/sam3_droid_%A_%a.err
 
 
 echo "JOB $SLURM_ARRAY_JOB_ID / TASK $SLURM_ARRAY_TASK_ID"
 
-# ===== 超参数 =====
-CHUNK=20                 # 每次 python 跑多少 episodes（跟你现在脚本保持一致）
-N_TASKS=32               # array 里一共有多少个 task（0-31 -> 32）
-TOTAL_EPISODES=10000     # 想覆盖多少个 episode（可以改成 95658 跑满 droid_101）
+# ===== Hyperparameters =====
+CHUNK=20                 # How many episodes per python run (consistent with your current script)
+N_TASKS=32               # Total number of tasks in the array (0-31 -> 32)
+TOTAL_EPISODES=10000     # How many episodes to cover (can change to 95658 to run full droid_101)
 
-# ===== 环境 =====
+# ===== Environment =====
 source /vision/u/yinhang/miniconda3/etc/profile.d/conda.sh
 conda activate sam3
 
@@ -27,10 +27,10 @@ cd /vision/u/yinhang/pre_process/task1
 
 TASK_ID=${SLURM_ARRAY_TASK_ID}
 
-# 这个 task 的第一个 offset
+# The first offset for this task
 OFFSET=$(( TASK_ID * CHUNK ))
 
-# 每次循环，offset 往前跳 N_TASKS * CHUNK
+# In each loop, offset jumps forward by N_TASKS * CHUNK
 STEP=$(( N_TASKS * CHUNK ))
 
 echo "Task ${TASK_ID}: start OFFSET=${OFFSET}, STEP=${STEP}, TOTAL_EPISODES=${TOTAL_EPISODES}"

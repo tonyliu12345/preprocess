@@ -2,9 +2,9 @@
 """
 prepare_stereo_job_list_rr_success.py
 
-基于 Round-Robin 版本的修改版：
-1. **只扫描 success 目录**：完全忽略 failure 数据。
-2. 保持原有的均匀采样、快速、跳过指定 Lab 等特性。
+Modified version based on Round-Robin:
+1. **Only scan success directories**: Completely ignore failure data.
+2. Maintain original features like uniform sampling, speed, and skipping specific Labs.
 """
 
 import argparse
@@ -18,7 +18,7 @@ import cv2
 
 EXCLUDED_LABS = {"IPRL", "RAIL", "RAD", "WEIRD"}
 
-# 简单的 reject 统计
+# Simple reject statistics
 REJECT_STATS = {
     "total_scanned": 0,
     "valid_found": 0,
@@ -28,15 +28,15 @@ REJECT_STATS = {
 def log_reject(reason: str):
     REJECT_STATS["reject_details"][reason] = REJECT_STATS["reject_details"].get(reason, 0) + 1
 
-# ----------------- 基础工具函数 ----------------- #
+# ----------------- Basic Utility Functions ----------------- #
 
 def resolve_stereo_mp4(root_dir: Path, rel_mp4: str) -> Tuple[Optional[Path], bool]:
     rel_path = Path(rel_mp4)
-    # 1. 直接检查
+    # 1. Check directly
     if rel_path.stem.endswith("-stereo"):
         p = (root_dir / rel_path).resolve()
         return p, p.is_file()
-    # 2. 拼凑 -stereo
+    # 2. Construct -stereo
     stereo_name = f"{rel_path.stem}-stereo{rel_path.suffix}"
     p = (root_dir / rel_path.with_name(stereo_name)).resolve()
     return p, p.is_file()
@@ -53,7 +53,7 @@ def video_duration_sec(path: Path) -> float:
         return 0.0
 
 def build_traj(meta: Dict, lab: str, lab_root: Path, min_dur: float) -> Optional[Dict]:
-    """尝试构建 trajectory，失败返回 None"""
+    """Attempt to build trajectory, return None if failed"""
     w_rel = meta.get("wrist_mp4_path")
     if not w_rel:
         log_reject("no_wrist_key")
@@ -98,13 +98,13 @@ def traj_to_jobs(traj: Dict) -> List[Dict]:
         {**base, "stereo_mp4": str(traj["robot_stereo"]), "role": "robot"},
     ]
 
-# ----------------- 核心逻辑：Lab 轮询器 (修改版) ----------------- #
+# ----------------- Core Logic: Lab Round-Robin (Modified) ----------------- #
 
 def get_metadata_iterator(lab_root: Path) -> Iterator[Path]:
-    """为一个 Lab 生成一个文件遍历器，限定只扫描 success 子目录"""
+    """Generate a file iterator for a Lab, restricted to scanning only the success subdirectory"""
     success_dir = lab_root / "success"
     
-    # 如果该 Lab 没有 success 目录，直接返回（生成器结束）
+    # If the Lab has no success directory, return directly (generator ends)
     if not success_dir.is_dir():
         return
 
@@ -114,7 +114,7 @@ def get_metadata_iterator(lab_root: Path) -> Iterator[Path]:
                 yield Path(root) / name
 
 def run_round_robin(dataset_root: Path, max_trajs: int, min_dur: float) -> List[Dict]:
-    # 1. 找到所有合法的 Lab 目录
+    # 1. Find all valid Lab directories
     all_subdirs = [d for d in dataset_root.iterdir() if d.is_dir()]
     valid_labs = []
     
@@ -127,7 +127,7 @@ def run_round_robin(dataset_root: Path, max_trajs: int, min_dur: float) -> List[
     random.shuffle(valid_labs)
     print(f"[INFO] Found {len(valid_labs)} labs: {valid_labs}")
 
-    # 2. 为每个 Lab 初始化一个迭代器
+    # 2. Initialize an iterator for each Lab
     lab_iterators = {}
     for lab in valid_labs:
         lab_root = dataset_root / lab
@@ -136,7 +136,7 @@ def run_round_robin(dataset_root: Path, max_trajs: int, min_dur: float) -> List[
     jobs = []
     collected_uuids = set()
     
-    # 3. 轮询
+    # 3. Round-Robin
     active_labs = list(valid_labs) 
     
     print(f"[INFO] Starting Round-Robin (SUCCESS ONLY) sampling for {max_trajs} trajectories...")
@@ -164,17 +164,17 @@ def run_round_robin(dataset_root: Path, max_trajs: int, min_dur: float) -> List[
                         collected_uuids.add(traj["uuid"])
                         REJECT_STATS["valid_found"] += 1
                         print(f"[HIT #{len(collected_uuids)}] From {current_lab} (Success): {traj['uuid']}")
-                        break # 这一轮完成，退出内层循环
+                        break # This round complete, exit inner loop
                 
-                # 防止单次占用太久
+                # Prevent taking too long in a single pass
                 if scan_attempt > 50:
                     break
             
-            # 放回队尾
+            # Put back to the end of the queue
             active_labs.append(current_lab)
 
         except StopIteration:
-            # 该 Lab 的 success 目录被掏空了
+            # The success directory of this Lab is exhausted
             pass
             
     return jobs
@@ -194,7 +194,7 @@ def main():
     parser.add_argument("--output", type=str, required=True)
     parser.add_argument("--max-jobs", type=int, default=3)
     parser.add_argument("--min-duration-sec", type=float, default=2.0)
-    # 兼容参数
+    # Compatibility arguments
     parser.add_argument("--uniform", action="store_true")
     parser.add_argument("--max-scan-per-lab", type=int, default=50)
 

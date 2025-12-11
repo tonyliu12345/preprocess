@@ -13,44 +13,44 @@ from PIL import Image
 from sam3.model_builder import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
 
-# ===== 基本配置 =====
+# ===== Basic Config =====
 # DATASET_NAME = "droid_100"
 # DATA_DIR = "gs://gresearch/robotics"
-# OUT_ROOT = Path("outputs/sam3")  # 所有 SAM3 结果放这里
+# OUT_ROOT = Path("outputs/sam3")  # All SAM3 results go here
 
-# ===== 配置 =====
-DROID_DIR = "/viscam/data/DROID/droid/1.0.1"   # ✅ 你刚刚验证过的路径
-DATASET_NAME = "droid_101"                     # 来自 builder.info.name
+# ===== Config =====
+DROID_DIR = "/viscam/data/DROID/droid/1.0.1"   # ✅ The path you just verified
+DATASET_NAME = "droid_101"                     # From builder.info.name
 OUT_ROOT = Path("outputs/sam3")
 
 
-# 想处理多少条 episode 由命令行 --count 决定，这里不再写死
+# The number of episodes to process is determined by the command line --count, not hardcoded here
 
-# 现在先只跑两个 exterior 视角；wrist 后面单独研究
+# Only running two exterior views for now; wrist will be studied separately later
 CAMERA_KEYS = [
     "exterior_image_1_left",
     "exterior_image_2_left",
     # "wrist_image_left",
 ]
 
-# 默认文本 prompt（camera-specific 在下面 CAMERA_PROMPTS 里）
+# Default text prompt (camera-specific ones are in CAMERA_PROMPTS below)
 TEXT_PROMPT = "robot arm"
 
-# camera 专属 prompt
+# Camera-specific prompts
 CAMERA_PROMPTS = {
     "exterior_image_1_left": "robot arm",
     "exterior_image_2_left": "robot arm",
     # "wrist_image_left": "robot gripper at the bottom of the image",
 }
 
-# 每个 camera 的二值化阈值
+# Binarization threshold for each camera
 CAMERA_THRESHOLDS = {
     "exterior_image_1_left": 0.5,
     "exterior_image_2_left": 0.5,
     # "wrist_image_left": 0.05,
 }
 
-# ===== 关掉 TensorFlow GPU，只让 TF 用 CPU（避免跟 PyTorch 抢显存）=====
+# ===== Disable TensorFlow GPU, let TF use CPU only (avoid VRAM conflict with PyTorch) =====
 try:
     tf.config.set_visible_devices([], "GPU")
     print("Disabled TensorFlow GPU; TF will run on CPU.")
@@ -62,7 +62,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print("PyTorch device:", DEVICE)
 
 
-# ===== SAM3 相关 =====
+# ===== SAM3 Related =====
 def load_sam3_model():
     print(f"Loading SAM3 image model on {DEVICE} ...")
     model = build_sam3_image_model()
@@ -74,32 +74,32 @@ def load_sam3_model():
 def run_sam3_on_frame(model, processor, frame_rgb: np.ndarray,
                       prompt: str, threshold: float) -> np.ndarray:
     """
-    输入: frame_rgb: (H, W, 3) uint8, RGB
-    输出: mask: (H, W) uint8, 0 或 255
+    Input: frame_rgb: (H, W, 3) uint8, RGB
+    Output: mask: (H, W) uint8, 0 or 255
     """
     pil_img = Image.fromarray(frame_rgb)
     state = processor.set_image(pil_img)
     output = processor.set_text_prompt(state=state, prompt=prompt)
 
-    masks = output["masks"]  # 可能是 [B, N, H, W] / [N, H, W] / [H, W]
+    masks = output["masks"]  # Could be [B, N, H, W] / [N, H, W] / [H, W]
 
     if isinstance(masks, torch.Tensor):
         masks_np = masks.detach().cpu().numpy()
     else:
         masks_np = np.asarray(masks)
 
-    # 没任何 mask：直接全黑
+    # No mask: completely black
     if masks_np.size == 0:
         H, W = frame_rgb.shape[:2]
         return np.zeros((H, W), dtype=np.uint8)
 
-    # 标准化 shape
+    # Normalize shape
     if masks_np.ndim == 4:
         # (B, N, H, W) -> (K, H, W)
         B, N, H, W = masks_np.shape
         masks_np = masks_np.reshape(B * N, H, W)
     elif masks_np.ndim == 3:
-        # (N, H, W) 或 (H, W, 1) -> 暂时不动
+        # (N, H, W) or (H, W, 1) -> leave as is for now
         pass
     elif masks_np.ndim == 2:
         mask = (masks_np > threshold).astype(np.uint8) * 255
@@ -107,7 +107,7 @@ def run_sam3_on_frame(model, processor, frame_rgb: np.ndarray,
     else:
         raise ValueError(f"Unsupported masks ndim={masks_np.ndim}, shape={masks_np.shape}")
 
-    # 到这里期望 (K, H, W)
+    # Expect (K, H, W) here
     if masks_np.ndim == 3 and masks_np.shape[0] == 1:
         union = masks_np[0]
     else:
@@ -116,11 +116,11 @@ def run_sam3_on_frame(model, processor, frame_rgb: np.ndarray,
     max_score = float(union.max())
 
     if max_score < threshold:
-        # 兜底策略：所有分数都很低，直接选平均激活最高的那一张 mask
+        # Fallback strategy: if all scores are low, select the mask with the highest average activation
         flat = masks_np.reshape(masks_np.shape[0], -1)
         best_idx = int(flat.mean(axis=1).argmax())
         best_mask = masks_np[best_idx]
-        # 对这个 best_mask 用更宽松的二值化
+        # Use looser binarization for this best_mask
         mask = (best_mask > 0.10).astype(np.uint8) * 255
     else:
         mask = (union > threshold).astype(np.uint8) * 255
@@ -128,17 +128,17 @@ def run_sam3_on_frame(model, processor, frame_rgb: np.ndarray,
     return mask
 
 
-# ===== 一些小工具函数 =====
+# ===== Utility Functions =====
 def get_episode_id(global_idx: int) -> str:
     """
-    简单稳定：用 global index，保证唯一性 & 可排序。
+    Simple and stable: use global index to ensure uniqueness & sortability.
     """
     return f"{DATASET_NAME}_ep_{global_idx:06d}"
 
 
 def extract_instruction(episode) -> str:
     """
-    从第一步里抽 language_instruction
+    Extract language_instruction from the first step
     """
     steps = episode["steps"]
     for step in steps:
@@ -148,8 +148,8 @@ def extract_instruction(episode) -> str:
 
 def extract_frames_per_camera(episode, camera_keys):
     """
-    把一个 episode 里的多 camera frame 都变成 numpy:
-    返回:
+    Convert multi-camera frames in an episode to numpy:
+    Returns:
       imgs_per_cam: dict[camera_key] -> np.ndarray (T, H, W, 3)
     """
     steps = episode["steps"]
@@ -181,10 +181,10 @@ def write_videos_for_camera(
     threshold: float,
 ) -> dict:
     """
-    写一个相机的：
+    Write for a camera:
       - rgb.mp4
       - robot_mask.mp4
-    返回一个 meta dict
+    Return a meta dict
     """
     cam_dir.mkdir(parents=True, exist_ok=True)
     T, H, W, _ = imgs.shape
@@ -232,7 +232,7 @@ def write_videos_for_camera(
     }
 
 
-# ===== 处理单个 episode =====
+# ===== Process Single Episode =====
 def process_one_episode(episode, global_idx: int, dataset_out_dir: Path,
                         model, processor):
     episode_id = get_episode_id(global_idx)
@@ -244,7 +244,7 @@ def process_one_episode(episode, global_idx: int, dataset_out_dir: Path,
     instr = extract_instruction(episode)
     print("Instruction:", instr)
 
-    # 拿到每个相机的 numpy 帧
+    # Get numpy frames for each camera
     imgs_per_cam = extract_frames_per_camera(episode, CAMERA_KEYS)
 
     cameras_meta = {}
@@ -260,7 +260,7 @@ def process_one_episode(episode, global_idx: int, dataset_out_dir: Path,
             "mask_video": f"{cam}/{cam_meta['mask_video']}",
         }
 
-    # 写 episode 级别 meta.json
+    # Write episode-level meta.json
     meta = {
         "dataset": DATASET_NAME,
         "episode_id": episode_id,
@@ -274,19 +274,19 @@ def process_one_episode(episode, global_idx: int, dataset_out_dir: Path,
 
     print(f"Saved meta to: {meta_path}")
 
-# ===== 主流程：支持 offset / count，用于 Slurm array 切分 =====
+# ===== Main Flow: Support offset / count, for Slurm array splitting =====
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--offset", type=int, default=0,
-                        help="跳过前多少个 episode（global index）")
+                        help="Skip the first N episodes (global index)")
     parser.add_argument("--count", type=int, default=1,
-                        help="本次处理多少个 episode")
+                        help="Number of episodes to process this time")
     args = parser.parse_args()
 
     dataset_out_dir = OUT_ROOT / DATASET_NAME
     dataset_out_dir.mkdir(parents=True, exist_ok=True)
 
-    # ✅ 用本地 RLDS droid_101，而不是 gs:// 的 droid_100
+    # ✅ Use local RLDS droid_101, not gs:// droid_100
     print(f"Loading builder from {DROID_DIR} ...")
     builder = tfds.builder_from_directory(DROID_DIR)
     info = builder.info
@@ -301,10 +301,10 @@ def main():
         read_config=tfds.ReadConfig(try_autocache=False),
     )
 
-    # 用 offset / count 截取一段（方便 Slurm array 并行）
+    # Use offset / count to take a slice (convenient for Slurm array parallelism)
     ds = ds.skip(args.offset).take(args.count)
 
-    # 整个脚本只 load 一次 SAM3
+    # Load SAM3 only once for the whole script
     model, processor = load_sam3_model()
 
     for local_idx, episode in enumerate(ds):

@@ -1,5 +1,5 @@
 import os
-os.environ["TRANSFORMERS_NO_TF"] = "1"  # 防止 transformers 去 import TF
+os.environ["TRANSFORMERS_NO_TF"] = "1"  # Prevent transformers from importing TF
 
 import torch
 import numpy as np
@@ -13,7 +13,7 @@ print(f"Loading Qwen-VL model: {MODEL_NAME} ...")
 processor = AutoProcessor.from_pretrained(MODEL_NAME, trust_remote_code=True)
 model = AutoModelForVision2Seq.from_pretrained(
     MODEL_NAME,
-    dtype=torch.float16,          # 等价于原来的 torch_dtype
+    dtype=torch.float16,          # Equivalent to the original torch_dtype
     device_map="auto",
     trust_remote_code=True,
 )
@@ -164,15 +164,15 @@ def qwen_vl_caption(img_np: np.ndarray) -> str:
 
     print("[RAW CAPTION]", repr(caption[:200]))
 
-    # ---- Step 1: 以 prompt 作为 anchor ----
+    # ---- Step 1: Use prompt as anchor ----
     if prompt in caption:
-        # 得到 prompt 后面的所有内容
+        # Get all content after the prompt
         after_prompt = caption.split(prompt, 1)[-1].lstrip()
     else:
-        after_prompt = caption  # 极少情况 prompt 不在 decode 里
+        after_prompt = caption  # Rare case where prompt is not in decode
 
-    # ---- Step 2: 寻找 assistant 的分割点 ----
-    # Qwen 输出通常是 "assistant" 或 "assistant\n"
+    # ---- Step 2: Find the split point for 'assistant' ----
+    # Qwen output is usually "assistant" or "assistant\n"
     for sep in ["assistant\n", "assistant:", "assistant :"]:
         if sep in after_prompt:
             after_prompt = after_prompt.split(sep, 1)[-1].lstrip()

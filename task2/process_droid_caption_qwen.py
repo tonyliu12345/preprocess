@@ -1,9 +1,9 @@
 # process_droid_caption_qwen.py
 
 import os
-os.environ["TRANSFORMERS_NO_TF"] = "1"  # 避免 transformers 去 import TF
+os.environ["TRANSFORMERS_NO_TF"] = "1"  # Prevent transformers from importing TF
 
-# 👇 让 TensorFlow 完全不用 GPU（避免和 Qwen 抢显存）
+# 👇 Completely disable TensorFlow GPU (avoid competing with Qwen for VRAM)
 import tensorflow as tf
 try:
     tf.config.set_visible_devices([], "GPU")
@@ -22,7 +22,7 @@ DROID_DIR = "/viscam/data/DROID/droid/1.0.1"
 OUT_DIR = Path("/vision/u/yinhang/pre_process/task2_outputs")
 
 MIN_STEPS = 60
-MAX_EPISODES = 10000   # 👈 目标 10k 轨迹
+MAX_EPISODES = 10000   # 👈 Target 10k trajectories
 
 
 def get_first_step_and_len(steps_ds):
@@ -88,12 +88,12 @@ def process_droid():
         if not instr_clean:
             no_instr_episodes += 1
 
-        # Call Qwen-VL (核心耗时部分)
+        # Call Qwen-VL (The core time-consuming part)
         # TODO - ADD INTRUCTION TO THE SCENE_CAPTION PROMPT & MENTION "The scene is: ..." BEFORE CAPTION
         try:
             scene_caption = qwen_vl_caption(img_np)
         except Exception as e:
-            # 防止单条炸掉整个 job
+            # Prevent a single failure from crashing the entire job
             print(f"[ERROR] Qwen caption failed at tfds_idx={epi_idx}, kept={kept}: {e}")
             continue
 
@@ -101,7 +101,7 @@ def process_droid():
         img_path = OUT_DIR / f"{episode_id}.png"
         Image.fromarray(img_np).save(img_path)
 
-        # 拼 combined 字段
+        # Construct combined field
         if instr_clean:
             combined = (
                 scene_caption.rstrip(". ") + ". "
@@ -123,7 +123,7 @@ def process_droid():
         with open(json_path, "w") as f:
             json.dump(record, f, ensure_ascii=False, indent=2)
 
-        # 进度 log
+        # Progress log
         print(
             f"[{kept}] saved {episode_id}.json & {episode_id}.png | "
             f"tfds_idx={epi_idx}, len={length}, "
@@ -135,7 +135,7 @@ def process_droid():
             print(f"[INFO] Reached MAX_EPISODES={MAX_EPISODES}, stopping.")
             break
 
-    # 结束时打印 summary
+    # Print summary at the end
     print("\n===== SUMMARY =====")
     print(f"Total TFDS episodes seen: {total_seen}")
     print(f"Empty episodes         : {empty_episodes}")
