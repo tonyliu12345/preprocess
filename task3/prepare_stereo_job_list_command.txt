@@ -1,0 +1,4 @@
+python prepare_stereo_job_list.py \
+    --dataset-root /viscam/data/DROID/droid_raw_t/1.0.1 \
+    --output /vision/u/yinhang/pre_process/task3/stereo_job_list_output/fs_stereo_jobs_10000.tsv \
+    --max-jobs 10000
